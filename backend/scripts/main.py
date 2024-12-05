@@ -8,19 +8,8 @@ from sklearn.decomposition import PCA
 import shutil
 import cv2
 
-
 def cluster_images(folder_path, n_clusters, output_path, batch_size=32, move_files=False):
-    """
-    Clusters images from the specified folder into n_clusters clusters and organizes them into subdirectories,
-    sorting images within each cluster by their sharpness.
-
-    :param folder_path: Path to the folder containing images.
-    :param n_clusters: The number of clusters to form.
-    :param output_path: Path to the output directory where clusters will be saved.
-    :param batch_size: Number of images to process in a batch.
-    :param move_files: If True, images will be moved instead of copied. Default is False.
-    :return: A list of clusters, where each cluster is a list of tuples (image_path, sharpness).
-    """
+    """Clusters images and organizes them into subdirectories."""
     # Ensure the output directory exists
     os.makedirs(output_path, exist_ok=True)
 
@@ -45,20 +34,29 @@ def cluster_images(folder_path, n_clusters, output_path, batch_size=32, move_fil
 
     # Define a function to load and preprocess images
     def load_and_preprocess_image(path):
-        # Read the image file
-        img = tf.io.read_file(path)
-        # Decode the image into a tensor
-        img = tf.image.decode_image(img, channels=3, expand_animations=False)
-        # Set shape for TensorFlow (unknown shape can cause issues)
-        img.set_shape((None, None, 3))
-        # Resize the image to the expected size
-        img = tf.image.resize(img, [224, 224])
-        # Preprocess the image for MobileNetV2
-        img = preprocess_input(img)
-        return img
+        path_str = path.numpy().decode('utf-8')  # Convert path to string
+        try:
+            # Read the image file
+            img = tf.io.read_file(path_str)
+            # Decode the image into a tensor
+            img = tf.image.decode_image(img, channels=3, expand_animations=False)
+            # Set shape for TensorFlow (unknown shape can cause issues)
+            img.set_shape((None, None, 3))
+            # Resize the image to the expected size
+            img = tf.image.resize(img, [224, 224])
+            # Preprocess the image for MobileNetV2
+            img = preprocess_input(img)
+            return img
+        except Exception as e:
+            print(f"Error processing image {path_str}: {e}")
+            return tf.zeros([224, 224, 3])
+
+    # Wrap the function to work with tf.data
+    def load_and_preprocess_image_wrapper(path):
+        return tf.py_function(load_and_preprocess_image, [path], tf.float32)
 
     # Map the preprocessing function to the dataset
-    image_ds = path_ds.map(load_and_preprocess_image, num_parallel_calls=tf.data.AUTOTUNE)
+    image_ds = path_ds.map(load_and_preprocess_image_wrapper, num_parallel_calls=tf.data.AUTOTUNE)
 
     # Batch and prefetch the dataset for optimal performance
     image_ds = image_ds.batch(batch_size)
@@ -104,14 +102,12 @@ def cluster_images(folder_path, n_clusters, output_path, batch_size=32, move_fil
         # Define the path for the cluster subdirectory
         cluster_dir = os.path.join(output_path, f'cluster_{idx + 1}')
         os.makedirs(cluster_dir, exist_ok=True)
-
         for i, (img_path, sharpness) in enumerate(cluster):
             # Get the basename of the image file
             img_name = os.path.basename(img_path)
             # Optionally, prefix the filename with the index to maintain order
             img_name_with_index = f"{i + 1:03d}_{img_name}"
             dest_path = os.path.join(cluster_dir, img_name_with_index)
-
             # Copy or move the image file to the cluster directory
             try:
                 if move_files:
@@ -129,14 +125,8 @@ def cluster_images(folder_path, n_clusters, output_path, batch_size=32, move_fil
 
     return clusters
 
-
 def calculate_sharpness(image_path):
-    """
-    Calculates the sharpness of an image using the variance of the Laplacian method.
-
-    :param image_path: Path to the image file.
-    :return: Sharpness value (variance of Laplacian) or None if an error occurs.
-    """
+    """Calculates the sharpness of an image using the variance of the Laplacian method."""
     try:
         # Read the image in grayscale
         img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
@@ -153,14 +143,18 @@ def calculate_sharpness(image_path):
         print(f"Error processing image {image_path}: {e}")
         return None
 
-
 def main():
-    folder_path = 'dataset'  # Input directory containing images
+    # Get the directory of this script
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    # Build folder paths relative to this script
+    folder_path = os.path.abspath(os.path.join(script_dir, '../data/dataset'))
+    output_path = os.path.abspath(os.path.join(script_dir, '../data/clusters'))
+
     n_clusters = 25  # Number of clusters you want
-    output_path = 'output'  # Output directory for clusters
     batch_size = 128  # Adjust based on your system's memory
     move_files = False  # Set to True to move files instead of copying
 
+    # Ensure the output directory exists
     shutil.rmtree(output_path, ignore_errors=True)
     os.makedirs(output_path, exist_ok=True)
 
@@ -170,10 +164,8 @@ def main():
     # Print out the clusters (optional)
     for idx, cluster in enumerate(clusters):
         print(f"Cluster {idx + 1}:")
-        for filename in cluster:
+        for filename, _ in cluster:
             print(f"  {filename}")
 
-
-# Press the green button in the gutter to run the script.
 if __name__ == '__main__':
     main()

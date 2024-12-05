@@ -9,12 +9,12 @@ const PORT = 5050;
 app.use(cors());
 
 // Replace with your actual output directory path
-const OUTPUT_DIR = path.join(__dirname, 'output');
-const EXPORT_DIR = path.join(__dirname, 'exported_images');
+const CLUSTERS_DIR = path.join(__dirname, 'data', 'clusters');
+const EXPORT_DIR = path.join(__dirname, 'data', 'exported_images');
 
 // Endpoint to get cluster data
 app.get('/api/clusters', (req, res) => {
-  fs.readdir(OUTPUT_DIR, (err, clusters) => {
+  fs.readdir(CLUSTERS_DIR, (err, clusters) => {
     if (err) {
       console.error(err);
       res.status(500).send('Error reading clusters');
@@ -31,7 +31,7 @@ app.get('/api/clusters', (req, res) => {
       });
 
     const clusterData = clusterFolders.map((cluster) => {
-      const clusterPath = path.join(OUTPUT_DIR, cluster);
+      const clusterPath = path.join(CLUSTERS_DIR, cluster);
       const images = fs
         .readdirSync(clusterPath)
         .filter((file) => /\.(jpg|jpeg|png|gif|bmp)$/i.test(file))
@@ -49,7 +49,7 @@ app.get('/api/clusters', (req, res) => {
 });
 
 // Serve images statically
-app.use('/images', express.static(OUTPUT_DIR));
+app.use('/images', express.static(CLUSTERS_DIR));
 
 // Handle export
 app.post('/api/export', express.json(), (req, res) => {
@@ -65,7 +65,7 @@ app.post('/api/export', express.json(), (req, res) => {
   }
 
   selectedImages.forEach((imgPath) => {
-    const srcPath = path.join(OUTPUT_DIR, imgPath);
+    const srcPath = path.join(CLUSTERS_DIR, imgPath);
     const destPath = path.join(EXPORT_DIR, path.basename(imgPath));
 
     // Copy the file
