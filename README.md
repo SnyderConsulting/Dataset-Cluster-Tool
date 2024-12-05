@@ -4,6 +4,8 @@
 
 This application clusters images and provides a web interface for selecting representative images from each cluster.
 
+![Screenshot of the application](example.png)
+
 ## Project Structure
 
 - `backend/`: Contains server code and clustering script.
